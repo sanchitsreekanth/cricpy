@@ -1,11 +1,9 @@
-from distutils.command.install_scripts import install_scripts
-from platform import python_revision
 import setuptools
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-install_requires = []
+install_requires = ["Click"]
 
 setuptools.setup(
     name="cricpy",
@@ -17,7 +15,15 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     install_requires=install_requires,
-    packages=setuptools.find_packages(exclude=("tests",)),
+    packages=setuptools.find_packages(exclude=["tests"]),
     include_package_data=True,
+    package_data={
+        "": ["data/*"]
+    },
+    entry_points={
+        "console_scripts": [
+            "cricpy=cricpy.scripts.main_script:cricpy_main"
+        ]
+    },
     python_requires=">=3.6"
 )
