@@ -1,5 +1,6 @@
 import click
-from cricpy.commons.db_utils import DBUtils
+from cricpy.utils.db import DBUtils
+from cricpy.constants.commons import CommonConstants
 
 
 @click.group()
@@ -12,4 +13,6 @@ def db():
 def create():
     """Command to create a blank database without any information
     """
-    DBUtils.initiliase_database(db_name="ipl.db")
+    for table_name, query in CommonConstants.TABLE_INFO.items():
+        DBUtils.create_table(table_name, query)
+        print(f"Created table {table_name}")
