@@ -5,13 +5,11 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 from cricpy.constants.commons import CommonConstants, URLConstants
+from cricpy.utils.commons import Utils
 
 
 class Parser(object):
-    """
-
-    Args:
-        object ([type]): [description]
+    """Class for parsing match data including stats and scorecards
     """
 
     LOGGER = logging.getLogger(__name__)
@@ -19,40 +17,56 @@ class Parser(object):
 
     @classmethod
     def get_soup_object_from_url(cls, url, parser: str = "lxml"):
-        """[summary]
+        """Get soup object from a url that can be used in BeautifulSoup
 
         Args:
-            url ([type]): [description]
+            url (string): URL of the page to be parsed
 
         Returns:
-            [type]: [description]
+            [BeautifulSoup]: Soup object of the url
         """
         page = requests.get(url)
         return BeautifulSoup(page.content, parser)
 
     @classmethod
-    def parser_match_ids_from_series(cls, series_id):
-        """[summary]
+    def parser_match_names_from_series(cls, series_id):
+        """Get the match names from ESPN Cricinfo for a series with id 'series_id'
 
         Args:
-            series_id ([type]): [description]
+            series_id (string): Series id of the series
         """
-        match_ids = []
+        match_names = []
         URL = f"{cls.SERIES_URL}/{series_id}/match-results"
         soup = cls.get_soup_object_from_url(url=URL)
         for element in soup.find_all(
             "a", class_=URLConstants.SERIES_MATCH_URL_CLASS_NAME
         ):
-            match_id = element["href"].split("/")[3]
-            match_ids.append(match_id)
-        return match_ids
+            match_name = element["href"].split("/")[3]
+            match_names.append(match_name)
+        return match_names
 
     @classmethod
     def get_teams_from_soup(cls, soup):
+        """Get the teams playing the match from soup object
+
+        Args:
+            soup (BeautifulSoup): bs4 object
+
+        Returns:
+            tuple: Tuple containing teams playing the match
+        """
         return (i.text for i in soup.find_all(class_="name-detail"))
 
     @classmethod
     def get_teams_innings_score_from_soup(cls, soup):
+        """Get innings score for each team playing the match
+
+        Args:
+            soup (BeautifulSoup): bs4 object
+
+        Returns:
+            tuple: Tuple containing innings score of teams playing the match
+        """
         scores = [i.text for i in soup.find_all("span", class_="score")]
         if len(scores) == 1:
             return (scores[0], None)
@@ -62,6 +76,14 @@ class Parser(object):
 
     @classmethod
     def get_winner_from_status(cls, status):
+        """Get the result of the match from the match 'status'
+
+        Args:
+            status (string): Status of the match as given in cricinfo status card
+
+        Returns:
+            tuple: Tuple conatining the (winner,status) of the match
+        """
         if "won by" in status:
             return tuple([i.strip() for i in status.split("won by")])
         else:
@@ -69,6 +91,14 @@ class Parser(object):
 
     @classmethod
     def get_match_summary_card(cls, soup):
+        """Get the summary card of the match
+
+        Args:
+            soup (BeautifulSoup): bs4 object
+
+        Returns:
+            Union(BeautifulSoup,None): Match summary card as bs4 object if exists else None
+        """
         match_summary = soup.find_all("tbody")
         for index, table in enumerate(match_summary):
             table_data = table.find_all("tr")[1].find("td").text
@@ -78,6 +108,11 @@ class Parser(object):
 
     @classmethod
     def get_innings_details(cls, soup: BeautifulSoup):
+        """Returns the innings details of a match
+
+        Args:
+            soup (BeautifulSoup): bs4 object
+        """
         first_innings, second_innings = cls.get_teams_from_soup(soup)
         (
             first_innings_score,
@@ -87,6 +122,15 @@ class Parser(object):
 
     @classmethod
     def get_runs_per_over(cls, series_id, match_id):
+        """Returns an array containing the runs scored in each over of an innings
+
+        Args:
+            series_id (string): Series id
+            match_id (string): Match id
+
+        Returns:
+            Tuple: Tuple containing the rpos of each innings as an array
+        """
         url = path.join(
             URLConstants.BASE_URL,
             f"{URLConstants.SERIES_URL}/{series_id}/{match_id}/match-statistics",
@@ -97,7 +141,7 @@ class Parser(object):
             "g", class_="rv-xy-plot__series rv-xy-plot__series--bar"
         )
         if not over_details:
-            return (None, None, None, None, None)
+            return (None, None)
         max_runs = int(
             soup.find("g", class_="rv-xy-plot__axis rv-xy-plot__axis--vertical")
             .find_all("text", class_="rv-xy-plot__axis__tick__text")[-1]
@@ -122,11 +166,60 @@ class Parser(object):
             ]
         else:
             second_innings_runs = None
-        print(first_innings_runs)
-        print(second_innings_runs)
+        return first_innings_runs, second_innings_runs
+
+    @classmethod
+    def get_fall_of_wickets(cls, series_id, match_id):
+        """Returns tuple cintaining fow and over of fow for both innings
+
+        Args:
+            series_id (string): Series id
+            match_id (string): Match id
+
+        Returns:
+            Tuple: (fow_innings_1,fow_innings_2,fow_over_innings_1,fow_over_innings_2)
+        """
+        url = path.join(
+            URLConstants.BASE_URL,
+            f"{URLConstants.SERIES_URL}/{series_id}/{match_id}/full-scorecard",
+        )
+        soup = cls.get_soup_object_from_url(url=url)
+        table = soup.find_all("tfoot")
+        if not table:
+            return None, None, None, None
+        first_innings_fow_details =table[0].find_all("td")[5].find_all("span")
+        fow_1, fow_overs_1 = cls._get_fow_from_array(first_innings_fow_details)
+        if len(table) == 2:
+            second_innings_fow_details =table[1].find_all("td")[5].find_all("span")
+            fow_2, fow_overs_2 = cls._get_fow_from_array(second_innings_fow_details)
+        else:
+            fow_overs_2 = fow_2 = None
+        return fow_1, fow_2, fow_overs_1, fow_overs_2
+
+    @classmethod
+    def _get_fow_from_array(cls, fow_details_array):
+        fow = []
+        fow_overs = []
+        for line in fow_details_array:
+            split_text = line.get_text().replace(",", "").strip().split()
+            fow.append(split_text[0])
+            fow_overs.append(split_text[-2])
+        return fow, fow_overs
 
     @classmethod
     def parse_match_info(cls, series_id, match_id):
+        """Returns a JSON object containing match details and summary
+
+        Args:
+            series_id (string): Series id
+            match_id (string): Match id
+
+        Raises:
+            Exception: If no match data is found
+
+        Returns:
+            Dict: Dictionary containing the match data including innings details, result, venue etc
+        """
         response_dict = CommonConstants.MATCH_DATA_RESPONSE_DATA.copy()
         url = path.join(
             URLConstants.BASE_URL,
@@ -142,6 +235,10 @@ class Parser(object):
         match_summary_card = [
             [j.text for j in i.find_all("td")] for i in match_summary_card
         ]
+        fow_1, fow_2, fow_overs_1, fow_overs_2 = cls.get_fall_of_wickets(
+            series_id=series_id, match_id=match_id
+        )
+        rpo_1, rpo_2 = cls.get_runs_per_over(series_id, match_id)
         venue = match_summary_card[0][0].split(",")[0].strip().replace("'", "")
         city = match_summary_card[0][0].split(",")[-1].strip()
         match_date, toss, man_of_the_match = None, None, None
@@ -169,16 +266,22 @@ class Parser(object):
         ) = cls.get_innings_details(soup=match_result_card)
         result = {
             "venue": venue,
-            "first_innings": first_innings,
-            "second_innings": second_innings,
+            "first_innings": Utils.get_team_symbol(first_innings),
+            "second_innings": Utils.get_team_symbol(second_innings),
             "first_innings_score": first_innings_score,
             "second_innings_score": second_innings_score,
             "city": city,
             "mom": man_of_the_match,
-            "toss": toss,
+            "toss": Utils.get_team_symbol(toss),
             "status": status,
             "winner": winner,
             "match_date": match_date,
+            "rpo_1": rpo_1,
+            "rpo_2": rpo_2,
+            "fow_1": fow_1,
+            "fow_2": fow_2,
+            "fow_overs_1": fow_overs_1,
+            "fow_overs_2": fow_overs_2,
         }
         response_dict.update(result)
         return response_dict

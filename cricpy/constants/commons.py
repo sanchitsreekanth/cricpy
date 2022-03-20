@@ -66,6 +66,6 @@ class CommonConstants:
         "rpo_2":None,
         "fow_1":None,
         "fow_2":None,
-        "over1":None,
-        "over2":None
+        "fow_overs_1":None,
+        "fow_overs_2":None
     }

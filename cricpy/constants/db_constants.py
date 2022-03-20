@@ -19,8 +19,8 @@ class DBConstants:
         rpo_2 text NOT NULL,
         fow_1 text NOT NULL,
         fow_2 text NOT NULL,
-        over1 text NOT NULL,
-        over2 text NOT NULL
+        fow_overs_1 text NOT NULL,
+        fow_overs_2 text NOT NULL
         );"""
         
     CREATE_MATCH_ID_TABLE_QUERY = """ CREATE TABLE IF NOT EXISTS match_id (
